@@ -244,6 +244,7 @@
     let peer;
     let connections = [];
     let gameStarted = false;
+    let tradeLines = [];
 
     const container = document.getElementById('game-container');
     const joinContainer = document.getElementById('join-container');
@@ -288,6 +289,7 @@
       assignUserPlanet();
       broadcastGameState();
       setInterval(broadcastGameState, 1000); // Broadcast game state every second
+      setInterval(updateTradeLines, 100); // Update trade lines every 100ms
     }
 
     function joinGame() {
@@ -513,50 +515,80 @@
       if (isDragging) {
         isDragging = false;
         if (currentArrow) {
-          container.removeChild(currentArrow);
-          currentArrow = null;
-        }
-        if (e.target.classList.contains('planet') || e.target.id === 'sun') {
-          const sourcePlayer = players.find(p => p.planet === userPlanet);
-          const targetResource = e.target.id === 'sun' ? 'Sun' : planets.find(p => p.element === e.target).resource;
-          const sourceResource = userPlanet.resource;
+          const startRect = startPlanet.getBoundingClientRect();
+          const startX = startRect.left + startRect.width / 2;
+          const startY = startRect.top + startRect.height / 2;
 
-          if (targetResource === 'Sun') {
-            // Attack the sun
-            if (Object.values(sourcePlayer.resources).every(r => r >= 1)) {
-              Object.keys(sourcePlayer.resources).forEach(key => sourcePlayer.resources[key] -= 1);
-              sunHealth -= 10;
-              sunHealth = Math.max(0, sunHealth);
-              sunHealthDisplay.textContent = `Sun Health: ${sunHealth}`;
-              logMessage("Attack ship launched towards the sun! Sun health decreased.");
-              updateSunAppearance();
-              if (sunHealth === 0) {
-                endGame();
-              }
-              broadcastGameState();
-            } else {
-              logMessage("Not enough resources to launch attack ship!");
-            }
-          } else {
-            // Trade between planets
-            const targetPlayer = players.find(p => p.planet.resource === targetResource);
-            if (sourcePlayer.resources[sourceResource] > 0) {
-              sourcePlayer.resources[sourceResource]--;
-              targetPlayer.resources[sourceResource]++;
-              sourcePlayer.resources[targetResource]++;
-              targetPlayer.resources[targetResource]--;
-              logMessage(`Traded 1 ${sourceResource} for 1 ${targetResource} with ${targetPlayer.name}`);
-              broadcastGameState();
-            } else {
-              logMessage(`Not enough ${sourceResource} to trade!`);
-            }
-          }
-          updateResourcesDisplay();
-          updatePlayersList();
+          const endX = e.clientX;
+          const endY = e.clientY;
+
+          const angle = Math.atan2(endY - startY, endX - startX);
+          const length = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+
+          const tradeLine = {
+            element: currentArrow,
+            startX,
+            startY,
+            endX,
+            endY,
+            angle,
+            length,
+            sourcePlanet: startPlanet,
+            targetElement: e.target,
+            progress: 0
+          };
+
+          tradeLines.push(tradeLine);
+          broadcastTradeLines();
+
+          currentArrow = null;
         }
         startPlanet = null;
       }
     });
+
+    function updateTradeLines() {
+      tradeLines.forEach((line, index) => {
+        line.progress += 0.01; // Increment progress
+        if (line.progress >= 1) {
+          // Trade line completed
+          const sourcePlayer = players.find(p => p.planet.element === line.sourcePlanet);
+          const targetResource = line.targetElement.id === 'sun' ? 'Sun' : planets.find(p => p.element === line.targetElement).resource;
+          const sourceResource = userPlanet.resource;
+
+          if (targetResource !== 'Sun') {
+            const targetPlayer = players.find(p => p.planet.resource === targetResource);
+            sourcePlayer.resources[targetResource]++;
+            targetPlayer.resources[targetResource]--;
+            logMessage(`Trade completed: 1 ${sourceResource} received from ${targetPlayer.name}`);
+          }
+
+          container.removeChild(line.element);
+          tradeLines.splice(index, 1);
+          broadcastTradeLines();
+        } else {
+          // Update trade line appearance
+          const newLength = line.length * (1 - line.progress);
+          line.element.style.width = `${newLength}px`;
+        }
+      });
+    }
+
+    function broadcastTradeLines() {
+      const tradeLinesData = tradeLines.map(line => ({
+        startX: line.startX,
+        startY: line.startY,
+        endX: line.endX,
+        endY: line.endY,
+        angle: line.angle,
+        length: line.length,
+        progress: line.progress,
+        sourcePlanetId: line.sourcePlanet.id,
+        targetElementId: line.targetElement.id
+      }));
+
+      connections.forEach(conn => conn.send({ type: 'tradeLines', tradeLines: tradeLinesData }));
+    }
 
     function updateSunAppearance() {
       const opacity = sunHealth / 100;
@@ -584,7 +616,18 @@
           },
           resources: player.resources
         })),
-        sunHealth: sunHealth
+        sunHealth: sunHealth,
+        tradeLines: tradeLines.map(line => ({
+          startX: line.startX,
+          startY: line.startY,
+          endX: line.endX,
+          endY: line.endY,
+          angle: line.angle,
+          length: line.length,
+          progress: line.progress,
+          sourcePlanetId: line.sourcePlanet.id,
+          targetElementId: line.targetElement.id
+        }))
       };
       connections.forEach(conn => conn.send(gameState));
     }
@@ -604,8 +647,54 @@
         if (sunHealth === 0) {
           endGame();
         }
+        tradeLines = data.tradeLines.map(line => {
+          const element = document.createElement('div');
+          element.className = 'arrow';
+          element.style.left = `${line.startX}px`;
+          element.style.top = `${line.startY}px`;
+          element.style.width = `${line.length}px`;
+          element.style.transform = `rotate(${line.angle}rad)`;
+          container.appendChild(element);
+
+          return {
+            element,
+            startX: line.startX,
+            startY: line.startY,
+            endX: line.endX,
+            endY: line.endY,
+            angle: line.angle,
+            length: line.length,
+            progress: line.progress,
+            sourcePlanet: planets.find(p => p.id === line.sourcePlanetId).element,
+            targetElement: document.getElementById(line.targetElementId)
+          };
+        });
       } else if (data.type === 'requestGameState') {
         broadcastGameState();
+      } else if (data.type === 'tradeLines') {
+        tradeLines.forEach(line => container.removeChild(line.element));
+        tradeLines = data.tradeLines.map(line => {
+          const element = document.createElement('div');
+          element.className = 'arrow';
+          element.style.left = `${line.startX}px`;
+          element.style.top = `${line.startY}px`;
+          element.style.width = `${line.length}px`;
+          element.style.transform = `rotate(${line.angle}rad)`;
+          container.appendChild(element);
+
+          return {
+            element,
+            startX: line.startX,
+            startY: line.startY,
+            endX: line.endX,
+            endY: line.endY,
+            angle: line.angle,
+            length: line.length,
+            progress: line.progress,
+            sourcePlanet: planets.find(p => p.id === line.sourcePlanetId).element,
+            targetElement: document.getElementById(line.targetElementId)
+          };
+        });
       }
     }
 
