@@ -1,0 +1,617 @@
+<html>
+
+<head>
+  <base
+    href="https://solarchaos.io/?2d=true&multiplayer=peerjs&join_automatically&join_code_visible&goal=extinguish%20the%20sun&mechanics=%5B'drag%20arrow%20between%20planets%20to%20trade%20user%20planet%20resource%20with%20target%20planet%20resource',%20'each%20planet%20represents%20a%20user',%20'user%20only%20controls%20trade%20and%20attack%20from%20their%20planet',%20'user%20planet%20only%20generates%20assigned%20resource',%20'drag%20arrow%20from%20planet%20to%20sun%20to%20extinguish%20sun',%20'attack%20ship%20costs%201%20of%20each%20resource',%20'trade%20ships%20are%20free'%5D&inspiration=galcon&planet_orbit_speed=0.1rad/s&join_code_via_textbox&production=true&game_version=3&paid_via_steam&sun_default_health=100&planet_resource_visible_to_all_players=true&hover_over_planet_to_see_planets_resources=true&win=sun%20goes%20dark&origin=sun&use_join_uuid_peerjs">
+  <title>Solar Chaos v3 - Multiplayer Sun Extinguishing Game</title>
+  <style>
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: 'Roboto', sans-serif;
+      background-color: #000;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    #game-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #sun {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      background: radial-gradient(circle, #ffff00, #ff4500);
+      border-radius: 50%;
+      box-shadow: 0 0 50px #ff6600;
+      transition: all 2s ease-in-out;
+    }
+
+    .planet {
+      position: absolute;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .planet:hover {
+      transform: scale(1.1);
+    }
+
+    .orbit {
+      position: absolute;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    #resources {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+    }
+
+    .resource {
+      display: flex;
+      align-items: center;
+    }
+
+    .resource-icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 5px;
+      background-size: contain;
+    }
+
+    #message-log {
+      position: absolute;
+      bottom: 40px;
+      right: 10px;
+      width: 300px;
+      height: 150px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 5px;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+
+    .arrow {
+      position: absolute;
+      height: 2px;
+      background-color: rgba(255, 255, 255, 0.7);
+      transform-origin: left center;
+      pointer-events: none;
+    }
+
+    #sun-health {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+
+    .planet-label {
+      position: absolute;
+      font-size: 12px;
+      color: #fff;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    #game-code {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    .planet-resources {
+      display: none;
+      position: absolute;
+      background: rgba(0, 0, 0, 0.8);
+      border-radius: 5px;
+      padding: 5px;
+      font-size: 12px;
+      z-index: 10;
+    }
+
+    #players-list {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    #win-message {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 24px;
+      text-align: center;
+      z-index: 1000;
+    }
+
+    #join-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    #join-code-input {
+      margin: 10px 0;
+      padding: 5px;
+      width: 200px;
+    }
+
+    #join-button,
+    #create-game-button {
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      border-radius: 5px;
+      margin: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="game-container">
+    <div id="sun"></div>
+    <div id="sun-health">Sun Health: 100</div>
+    <div id="hud">
+      <h2>Solar Chaos v3</h2>
+      <p>Goal: Extinguish the Sun</p>
+      <div id="player-info"></div>
+      <div id="resources"></div>
+    </div>
+    <div id="join-container">
+      <h3>Solar Chaos v3</h3>
+      <input type="text" id="join-code-input" placeholder="Enter game code">
+      <button id="join-button">Join Game</button>
+      <button id="create-game-button">Create New Game</button>
+    </div>
+    <div id="message-log"></div>
+    <div id="game-code"></div>
+    <div id="players-list"></div>
+    <div id="win-message"></div>
+  </div>
+
+  <script src="https://steele.red/solarchaos/peerjs.min.js"></script>
+  <script>
+    const planets = [
+      { id: 'mercury', name: 'Mercury', color: '#8c7853', size: 15, orbitRadius: 100, resource: 'steel' },
+      { id: 'venus', name: 'Venus', color: '#e6e6fa', size: 22, orbitRadius: 150, resource: 'engine' },
+      { id: 'earth', name: 'Earth', color: '#4169e1', size: 25, orbitRadius: 200, resource: 'water' },
+      { id: 'mars', name: 'Mars', color: '#b22222', size: 20, orbitRadius: 250, resource: 'fuel' },
+      { id: 'jupiter', name: 'Jupiter', color: '#ffa500', size: 45, orbitRadius: 350, resource: 'people' }
+    ];
+
+    const resourceIcons = {
+      steel: '\uD83D\uDD27',  // 🔧
+      engine: '\uD83D\uDE80', // 🚀
+      water: '\uD83D\uDCA7',  // 💧
+      fuel: '\u26FD',         // ⛽
+      people: '\uD83D\uDC65'  // 👥
+    };
+
+    let userPlanet;
+    let resources = { steel: 0, engine: 0, water: 0, fuel: 0, people: 0 };
+    let sunHealth = 100;
+    let players = [];
+    let peer;
+    let connections = [];
+    let gameStarted = false;
+
+    const container = document.getElementById('game-container');
+    const joinContainer = document.getElementById('join-container');
+    const joinCodeInput = document.getElementById('join-code-input');
+    const joinButton = document.getElementById('join-button');
+    const createGameButton = document.getElementById('create-game-button');
+    const messageLog = document.getElementById('message-log');
+    const playerInfo = document.getElementById('player-info');
+    const resourcesDisplay = document.getElementById('resources');
+    const sunHealthDisplay = document.getElementById('sun-health');
+    const gameCodeDisplay = document.getElementById('game-code');
+    const playersListDisplay = document.getElementById('players-list');
+    const winMessageDisplay = document.getElementById('win-message');
+    const sunElement = document.getElementById('sun');
+
+    function initializeGame() {
+      const storedPlayerId = localStorage.getItem('playerId');
+      if (storedPlayerId) {
+        peer = new Peer(storedPlayerId);
+      } else {
+        peer = new Peer(generateUUID());
+      }
+
+      peer.on('open', (id) => {
+        console.log('My peer ID is: ' + id);
+        gameCodeDisplay.textContent = `Game Code: ${id}`;
+        localStorage.setItem('playerId', id);
+      });
+
+      peer.on('connection', (conn) => {
+        handleConnection(conn);
+      });
+
+      createGameButton.addEventListener('click', createGame);
+      joinButton.addEventListener('click', joinGame);
+    }
+
+    function createGame() {
+      gameStarted = true;
+      joinContainer.style.display = 'none';
+      setupPlanets();
+      assignUserPlanet();
+      broadcastGameState();
+      setInterval(broadcastGameState, 1000); // Broadcast game state every second
+    }
+
+    function joinGame() {
+      if (gameStarted) {
+        alert("You have already joined or created a game.");
+        return;
+      }
+
+      const joinCode = joinCodeInput.value.trim();
+      if (joinCode) {
+        createGame();
+        const conn = peer.connect(joinCode);
+        conn.on('open', () => {
+          handleConnection(conn);
+          conn.send({ type: 'requestGameState' });
+        });
+      } else {
+        alert("Please enter a valid game code");
+      }
+    }
+
+    function handleConnection(conn) {
+      connections.push(conn);
+
+      conn.on('open', () => {
+        console.log("Connected to: " + conn.peer);
+        if (!gameStarted) {
+          gameStarted = true;
+          joinContainer.style.display = 'none';
+          setupPlanets();
+          assignUserPlanet();
+        }
+        conn.send({ type: 'requestGameState' });
+      });
+
+      conn.on('data', (data) => {
+        handleReceivedData(data);
+      });
+    }
+
+    function setupPlanets() {
+      planets.forEach((planet, index) => {
+        const orbit = document.createElement('div');
+        orbit.className = 'orbit';
+        orbit.style.width = `${planet.orbitRadius * 2}px`;
+        orbit.style.height = `${planet.orbitRadius * 2}px`;
+        orbit.style.top = `${window.innerHeight / 2 - planet.orbitRadius}px`;
+        orbit.style.left = `${window.innerWidth / 2 - planet.orbitRadius}px`;
+        container.appendChild(orbit);
+
+        const el = document.createElement('div');
+        el.className = 'planet';
+        el.id = planet.id;
+        el.style.width = `${planet.size}px`;
+        el.style.height = `${planet.size}px`;
+        el.style.backgroundColor = planet.color;
+        container.appendChild(el);
+        planet.element = el;
+
+        const label = document.createElement('div');
+        label.className = 'planet-label';
+        label.textContent = `${planet.name}\n${resourceIcons[planet.resource]}`;
+        container.appendChild(label);
+        planet.label = label;
+
+        const resourcesInfo = document.createElement('div');
+        resourcesInfo.className = 'planet-resources';
+        container.appendChild(resourcesInfo);
+        planet.resourcesInfo = resourcesInfo;
+
+        el.addEventListener('mouseover', () => showPlanetResources(planet));
+        el.addEventListener('mouseout', () => hidePlanetResources(planet));
+
+        players.push({
+          name: `Player ${index + 1}`,
+          planet: planet,
+          resources: { ...resources }
+        });
+      });
+
+      updatePlanetPositions();
+      setInterval(updateResources, 1000);
+      updatePlayersList();
+    }
+
+    function assignUserPlanet() {
+      const availablePlanets = planets.filter(p => !players.some(player => player.planet === p && player.name !== `Player ${planets.indexOf(p) + 1}`));
+      if (availablePlanets.length > 0) {
+        userPlanet = availablePlanets[Math.floor(Math.random() * availablePlanets.length)];
+        const newPlayer = players.find(p => p.planet === userPlanet);
+        newPlayer.name = "You";
+        playerInfo.textContent = `Your Planet: ${userPlanet.name} (${userPlanet.resource})`;
+        logMessage(`You control ${userPlanet.name}, producing ${userPlanet.resource}`);
+        updatePlayersList();
+      } else {
+        logMessage("All planets are occupied. Spectating mode active.");
+      }
+    }
+
+    function showPlanetResources(planet) {
+      const player = players.find(p => p.planet === planet);
+      if (player) {
+        const resourcesList = Object.entries(player.resources)
+          .map(([resource, amount]) => `${resourceIcons[resource]} ${resource}: ${amount}`)
+          .join('<br>');
+        planet.resourcesInfo.innerHTML = resourcesList;
+        planet.resourcesInfo.style.display = 'block';
+        positionResourcesInfo(planet);
+      }
+    }
+
+    function hidePlanetResources(planet) {
+      planet.resourcesInfo.style.display = 'none';
+    }
+
+    function positionResourcesInfo(planet) {
+      const rect = planet.element.getBoundingClientRect();
+      planet.resourcesInfo.style.left = `${rect.right + 10}px`;
+      planet.resourcesInfo.style.top = `${rect.top}px`;
+    }
+
+    function updatePlanetPositions() {
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const orbitSpeed = 0.1; // 0.1 rad/s
+
+      planets.forEach((planet, index) => {
+        if (planet.element) {
+          const angle = (Date.now() / 1000) * orbitSpeed + (index * (Math.PI / 2.5));
+          const x = centerX + Math.cos(angle) * planet.orbitRadius - planet.size / 2;
+          const y = centerY + Math.sin(angle) * planet.orbitRadius - planet.size / 2;
+          planet.element.style.left = `${x}px`;
+          planet.element.style.top = `${y}px`;
+
+          planet.label.style.left = `${x + planet.size / 2 - 30}px`;
+          planet.label.style.top = `${y + planet.size + 5}px`;
+        }
+
+        positionResourcesInfo(planet);
+      });
+
+      requestAnimationFrame(updatePlanetPositions);
+    }
+
+    function updateResources() {
+      if (gameStarted) {
+        players.forEach(player => {
+          player.resources[player.planet.resource]++;
+        });
+        updateResourcesDisplay();
+        updatePlayersList();
+        broadcastGameState();
+      }
+    }
+
+    function updateResourcesDisplay() {
+      if (userPlanet) {
+        const player = players.find(p => p.planet === userPlanet);
+        resourcesDisplay.innerHTML = Object.entries(player.resources)
+          .map(([resource, amount]) => `
+        <div class="resource">
+          <span class="resource-icon">${resourceIcons[resource]}</span>
+          <span>${resource}: ${amount}</span>
+        </div>
+      `).join('');
+      }
+    }
+
+    function updatePlayersList() {
+      playersListDisplay.innerHTML = '<h3>Players</h3>' + players.map(player =>
+        `<div>${player.name} (${player.planet.name}): ${resourceIcons[player.planet.resource]}</div>`
+      ).join('');
+    }
+
+    function logMessage(message) {
+      const messageElement = document.createElement('div');
+      messageElement.textContent = message;
+      messageLog.appendChild(messageElement);
+      messageLog.scrollTop = messageLog.scrollHeight;
+    }
+
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    let isDragging = false;
+    let startPlanet = null;
+    let currentArrow = null;
+
+    container.addEventListener('mousedown', e => {
+      if (gameStarted && e.target.classList.contains('planet') &&
+        e.target === userPlanet.element) {
+        isDragging = true;
+        startPlanet = e.target;
+        currentArrow = document.createElement('div');
+        currentArrow.className = 'arrow';
+        container.appendChild(currentArrow);
+      }
+    });
+
+    container.addEventListener('mousemove', e => {
+      if (isDragging && startPlanet) {
+        const startRect = startPlanet.getBoundingClientRect();
+        const startX = startRect.left + startRect.width / 2;
+        const startY = startRect.top + startRect.height / 2;
+
+        const endX = e.clientX;
+        const endY = e.clientY;
+
+        const angle = Math.atan2(endY - startY, endX - startX);
+        const length = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+
+        currentArrow.style.left = `${startX}px`;
+        currentArrow.style.top = `${startY}px`;
+        currentArrow.style.width = `${length}px`;
+        currentArrow.style.transform = `rotate(${angle}rad)`;
+      }
+    });
+
+    container.addEventListener('mouseup', e => {
+      if (isDragging) {
+        isDragging = false;
+        if (currentArrow) {
+          container.removeChild(currentArrow);
+          currentArrow = null;
+        }
+        if (e.target.classList.contains('planet') || e.target.id === 'sun') {
+          const sourcePlayer = players.find(p => p.planet === userPlanet);
+          const targetResource = e.target.id === 'sun' ? 'Sun' : planets.find(p => p.element === e.target).resource;
+          const sourceResource = userPlanet.resource;
+
+          if (targetResource === 'Sun') {
+            // Attack the sun
+            if (Object.values(sourcePlayer.resources).every(r => r >= 1)) {
+              Object.keys(sourcePlayer.resources).forEach(key => sourcePlayer.resources[key] -= 1);
+              sunHealth -= 10;
+              sunHealth = Math.max(0, sunHealth);
+              sunHealthDisplay.textContent = `Sun Health: ${sunHealth}`;
+              logMessage("Attack ship launched towards the sun! Sun health decreased.");
+              updateSunAppearance();
+              if (sunHealth === 0) {
+                endGame();
+              }
+              broadcastGameState();
+            } else {
+              logMessage("Not enough resources to launch attack ship!");
+            }
+          } else {
+            // Trade between planets
+            const targetPlayer = players.find(p => p.planet.resource === targetResource);
+            if (sourcePlayer.resources[sourceResource] > 0) {
+              sourcePlayer.resources[sourceResource]--;
+              targetPlayer.resources[sourceResource]++;
+              sourcePlayer.resources[targetResource]++;
+              targetPlayer.resources[targetResource]--;
+              logMessage(`Traded 1 ${sourceResource} for 1 ${targetResource} with ${targetPlayer.name}`);
+              broadcastGameState();
+            } else {
+              logMessage(`Not enough ${sourceResource} to trade!`);
+            }
+          }
+          updateResourcesDisplay();
+          updatePlayersList();
+        }
+        startPlanet = null;
+      }
+    });
+
+    function updateSunAppearance() {
+      const opacity = sunHealth / 100;
+      sunElement.style.opacity = opacity;
+      sunElement.style.boxShadow = `0 0 ${50 * opacity}px #ff6600`;
+    }
+
+    function endGame() {
+      logMessage("Congratulations! The sun has been extinguished!");
+      winMessageDisplay.textContent = "You Win! The sun has gone dark.";
+      winMessageDisplay.style.display = "block";
+      gameStarted = false;
+      broadcastGameState();
+    }
+
+    function broadcastGameState() {
+      const gameState = {
+        type: 'gameState',
+        players: players.map(player => ({
+          name: player.name,
+          planet: {
+            id: player.planet.id,
+            name: player.planet.name,
+            resource: player.planet.resource
+          },
+          resources: player.resources
+        })),
+        sunHealth: sunHealth
+      };
+      connections.forEach(conn => conn.send(gameState));
+    }
+
+    function handleReceivedData(data) {
+      if (data.type === 'gameState') {
+        players = data.players.map(player => ({
+          name: player.name,
+          planet: planets.find(p => p.id === player.planet.id),
+          resources: player.resources
+        }));
+        sunHealth = data.sunHealth;
+        updateResourcesDisplay();
+        updatePlayersList();
+        updateSunAppearance();
+        sunHealthDisplay.textContent = `Sun Health: ${sunHealth}`;
+        if (sunHealth === 0) {
+          endGame();
+        }
+      } else if (data.type === 'requestGameState') {
+        broadcastGameState();
+      }
+    }
+
+    initializeGame();
+  </script>
+</body>
+
+</html>
