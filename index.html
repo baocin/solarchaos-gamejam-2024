@@ -417,9 +417,7 @@
 
       planets.forEach((planet, index) => {
         if (planet.element) {
-          const angle = (Date.now() / 1000) * planet.orbitSpeed;
-          const x = centerX + Math.cos(angle) * planet.orbitRadius - planet.size / 2;
-          const y = centerY + Math.sin(angle) * planet.orbitRadius - planet.size / 2;
+          const { x, y } = calculatePlanetPosition(planet);
           planet.element.style.left = `${x}px`;
           planet.element.style.top = `${y}px`;
 
@@ -431,6 +429,16 @@
       });
 
       requestAnimationFrame(updatePlanetPositions);
+    }
+
+    function calculatePlanetPosition(planet, futureTime = 0) {
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const currentTime = Date.now() + futureTime;
+      const angle = (currentTime / 1000) * planet.orbitSpeed;
+      const x = centerX + Math.cos(angle) * planet.orbitRadius;
+      const y = centerY + Math.sin(angle) * planet.orbitRadius;
+      return { x, y };
     }
 
     function updateResources() {
@@ -515,16 +523,17 @@
       if (isDragging) {
         isDragging = false;
         if (currentArrow) {
-          const startRect = startPlanet.getBoundingClientRect();
-          const startX = startRect.left + startRect.width / 2;
-          const startY = startRect.top + startRect.height / 2;
-
           const endX = e.clientX;
           const endY = e.clientY;
+          const sourcePlanetObject = planets.find(p => p.element === startPlanet);
+          let { x: startX, y: startY } = calculatePlanetPosition(sourcePlanetObject);
+          // startY += sourcePlanetObject.element.height / 2;
+          // startX += sourcePlanetObject.element.width / 2;
 
+          console.log("sourcePlanetObject", sourcePlanetObject);
           const angle = Math.atan2(endY - startY, endX - startX);
           const length = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
-
+          
           const tradeLine = {
             element: currentArrow,
             startX,
@@ -535,7 +544,7 @@
             length,
             sourcePlanet: startPlanet,
             targetElement: e.target,
-            progress: 0
+            progress: 0,
           };
 
           tradeLines.push(tradeLine);
@@ -568,9 +577,23 @@
           tradeLines.splice(index, 1);
           broadcastTradeLines();
         } else {
+          // Continuously update trade line to target the sourcePlanetObject
+          const sourcePlanetObject = planets.find(p => p.element === line.sourcePlanet);
+          const { x: startX, y: startY } = calculatePlanetPosition(sourcePlanetObject);
+          const angle = Math.atan2(line.endY - startY, line.endX - startX);
+          const length = Math.sqrt((line.endX - startX) ** 2 + (line.endY - startY) ** 2);
+
+          line.startX = startX;
+          line.startY = startY;
+          line.angle = angle;
+          line.length = length;
+
           // Update trade line appearance
           const newLength = line.length * (1 - line.progress);
+          line.element.style.left = `${line.startX}px`;
+          line.element.style.top = `${line.startY}px`;
           line.element.style.width = `${newLength}px`;
+          line.element.style.transform = `rotate(${line.angle}rad)`;
         }
       });
     }
