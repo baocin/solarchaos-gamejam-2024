@@ -222,11 +222,11 @@
   <script src="https://steele.red/solarchaos/peerjs.min.js"></script>
   <script>
     const planets = [
-      { id: 'mercury', name: 'Mercury', color: '#8c7853', size: 15, orbitRadius: 100, resource: 'steel' },
-      { id: 'venus', name: 'Venus', color: '#e6e6fa', size: 22, orbitRadius: 150, resource: 'engine' },
-      { id: 'earth', name: 'Earth', color: '#4169e1', size: 25, orbitRadius: 200, resource: 'water' },
-      { id: 'mars', name: 'Mars', color: '#b22222', size: 20, orbitRadius: 250, resource: 'fuel' },
-      { id: 'jupiter', name: 'Jupiter', color: '#ffa500', size: 45, orbitRadius: 350, resource: 'people' }
+      { id: 'mercury', name: 'Mercury', color: '#8c7853', size: 15, orbitRadius: 100, resource: 'steel', orbitSpeed: 0.2 },
+      { id: 'venus', name: 'Venus', color: '#e6e6fa', size: 22, orbitRadius: 150, resource: 'engine', orbitSpeed: 0.15 },
+      { id: 'earth', name: 'Earth', color: '#4169e1', size: 25, orbitRadius: 200, resource: 'water', orbitSpeed: 0.1 },
+      { id: 'mars', name: 'Mars', color: '#b22222', size: 20, orbitRadius: 250, resource: 'fuel', orbitSpeed: 0.08 },
+      { id: 'jupiter', name: 'Jupiter', color: '#ffa500', size: 45, orbitRadius: 350, resource: 'people', orbitSpeed: 0.05 }
     ];
 
     const resourceIcons = {
@@ -412,11 +412,10 @@
     function updatePlanetPositions() {
       const centerX = window.innerWidth / 2;
       const centerY = window.innerHeight / 2;
-      const orbitSpeed = 0.1; // 0.1 rad/s
 
       planets.forEach((planet, index) => {
         if (planet.element) {
-          const angle = (Date.now() / 1000) * orbitSpeed + (index * (Math.PI / 2.5));
+          const angle = (Date.now() / 1000) * planet.orbitSpeed;
           const x = centerX + Math.cos(angle) * planet.orbitRadius - planet.size / 2;
           const y = centerY + Math.sin(angle) * planet.orbitRadius - planet.size / 2;
           planet.element.style.left = `${x}px`;
