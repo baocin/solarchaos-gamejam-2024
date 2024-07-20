@@ -553,10 +553,11 @@
         if (line.progress >= 1) {
           // Trade line completed
           const sourcePlayer = players.find(p => p.planet.element === line.sourcePlanet);
-          const targetResource = line.targetElement.id === 'sun' ? 'Sun' : planets.find(p => p.element === line.targetElement).resource;
+          const targetPlanet = planets.find(p => p.element === line.targetElement);
+          const targetResource = line.targetElement.id === 'sun' ? 'Sun' : targetPlanet ? targetPlanet.resource : null;
           const sourceResource = userPlanet.resource;
 
-          if (targetResource !== 'Sun') {
+          if (targetResource && targetResource !== 'Sun') {
             const targetPlayer = players.find(p => p.planet.resource === targetResource);
             sourcePlayer.resources[targetResource]++;
             targetPlayer.resources[targetResource]--;
