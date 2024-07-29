@@ -338,7 +338,16 @@
           const sourcePlanetObject = planets.find(p => p.element === startPlanet);
           let { x: startX, y: startY } = calculatePlanetPosition(sourcePlanetObject);
 
-          console.log("sourcePlanetObject", sourcePlanetObject);
+          const targetElement = e.target;
+          const isSunTarget = targetElement.id === 'sun';
+
+          // Adjust end coordinates if the target is the sun
+          if (isSunTarget) {
+            const sunRect = sunElement.getBoundingClientRect();
+            endX = sunRect.left + sunRect.width / 2;
+            endY = sunRect.top + sunRect.height / 2;
+          }
+
           const angle = Math.atan2(endY - startY, endX - startX);
           const length = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
           
@@ -351,8 +360,9 @@
             angle,
             length,
             sourcePlanet: startPlanet,
-            targetElement: e.target,
+            targetElement: targetElement,
             progress: 0,
+            isSunTarget: isSunTarget
           };
 
           tradeLines.push(tradeLine);
@@ -379,10 +389,19 @@
           // Trade line completed
           const sourcePlayer = players.find(p => p.planet.element === line.sourcePlanet);
           const targetPlanet = planets.find(p => p.element === line.targetElement);
-          const targetResource = line.targetElement.id === 'sun' ? 'Sun' : targetPlanet ? targetPlanet.resource : null;
-          const sourceResource = userPlanet.resource;
+          const targetResource = line.isSunTarget ? 'Sun' : targetPlanet ? targetPlanet.resource : null;
+          const sourceResource = sourcePlayer.planet.resource;
 
-          if (targetResource && targetResource !== 'Sun') {
+          if (targetResource === 'Sun') {
+            // Decrease sun health
+            sunHealth = Math.max(0, sunHealth - 1);
+            sunHealthDisplay.textContent = `Sun Health: ${sunHealth}`;
+            updateSunAppearance();
+            logMessage(`Attack on Sun: -1 health (Current: ${sunHealth})`);
+            if (sunHealth === 0) {
+              endGame();
+            }
+          } else if (targetResource) {
             const targetPlayer = players.find(p => p.planet.resource === targetResource);
             sourcePlayer.resources[targetResource]++;
             targetPlayer.resources[targetResource]--;
@@ -392,15 +411,29 @@
           container.removeChild(line.element);
           tradeLines.splice(index, 1);
           broadcastTradeLines();
+          broadcastGameState();
         } else {
           // Continuously update trade line to target the sourcePlanetObject
           const sourcePlanetObject = planets.find(p => p.element === line.sourcePlanet);
           const { x: startX, y: startY } = calculatePlanetPosition(sourcePlanetObject);
-          const angle = Math.atan2(line.endY - startY, line.endX - startX);
-          const length = Math.sqrt((line.endX - startX) ** 2 + (line.endY - startY) ** 2);
+          
+          let endX, endY;
+          if (line.isSunTarget) {
+            const sunRect = sunElement.getBoundingClientRect();
+            endX = sunRect.left + sunRect.width / 2;
+            endY = sunRect.top + sunRect.height / 2;
+          } else {
+            endX = line.endX;
+            endY = line.endY;
+          }
+
+          const angle = Math.atan2(endY - startY, endX - startX);
+          const length = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
 
           line.startX = startX;
           line.startY = startY;
+          line.endX = endX;
+          line.endY = endY;
           line.angle = angle;
           line.length = length;
 
@@ -424,7 +457,8 @@
         length: line.length,
         progress: line.progress,
         sourcePlanetId: line.sourcePlanet.id,
-        targetElementId: line.targetElement.id
+        targetElementId: line.targetElement.id,
+        isSunTarget: line.isSunTarget
       }));
 
       connections.forEach(conn => conn.send({ type: 'tradeLines', tradeLines: tradeLinesData }));
@@ -466,7 +500,8 @@
           length: line.length,
           progress: line.progress,
           sourcePlanetId: line.sourcePlanet.id,
-          targetElementId: line.targetElement.id
+          targetElementId: line.targetElement.id,
+          isSunTarget: line.isSunTarget
         }))
       };
       connections.forEach(conn => conn.send(gameState));
@@ -506,7 +541,8 @@
             length: line.length,
             progress: line.progress,
             sourcePlanet: planets.find(p => p.id === line.sourcePlanetId).element,
-            targetElement: document.getElementById(line.targetElementId)
+            targetElement: document.getElementById(line.targetElementId),
+            isSunTarget: line.isSunTarget
           };
         });
       } else if (data.type === 'requestGameState') {
@@ -532,7 +568,8 @@
             length: line.length,
             progress: line.progress,
             sourcePlanet: planets.find(p => p.id === line.sourcePlanetId).element,
-            targetElement: document.getElementById(line.targetElementId)
+            targetElement: document.getElementById(line.targetElementId),
+            isSunTarget: line.isSunTarget
           };
         });
       }
